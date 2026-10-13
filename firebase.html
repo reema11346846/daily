@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>يومياتي | مساحة التدوين الهادئة</title>
+
+  <!-- خط Readex Pro المريح للعين وعسر القراءة والتركيز -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- مكتبات Firebase Realtime Database الرسمية -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+  <!-- إعداد Tailwind CSS بلوحة ألوان باستيل دافئة مانعة للتوهج -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Readex Pro"', 'sans-serif'],
+          },
+          colors: {
+            canvas: {
+              base: '#14161b',
+              surface: '#1d2028',
+              hover: '#252934',
+              border: '#2a2f3d',
+              borderLight: '#394052'
+            },
+            soft: {
+              cream: '#e8e4dc',
+              muted: '#9c978f',
+              faint: '#65625b',
+              rose: '#dda3ac',
+              sky: '#94b8d4',
+              sage: '#86c19f',
+              apricot: '#e0ad80',
+              lavender: '#b9a5cf',
+              amber: '#dfb776'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #14161b;
+      color: #e8e4dc;
+      font-family: 'Readex Pro', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #14161b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2a2f3d;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #394052;
+    }
+
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.85) sepia(0.2) saturate(0.5);
+      cursor: pointer;
+    }
+
+    textarea:focus, input:focus, select:focus {
+      outline: none;
+    }
+
+    .touch-target {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  </style>
+</head>
+<body class="bg-canvas-base text-soft-cream flex flex-col min-h-screen selection:bg-soft-rose/30 selection:text-soft-cream">
+
+  <!-- شريط الرأس مع مؤشر المزامنة السحابية اللحظية -->
+  <header class="sticky top-0 z-40 bg-canvas-base/95 backdrop-blur-md border-b border-canvas-border px-3 sm:px-6 py-2.5 sm:py-3 transition-all">
+    <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5 sm:gap-4">
+      
+      <!-- شعار التطبيق ومؤشر حالة السحابة -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-canvas-surface border border-canvas-border flex items-center justify-center text-lg shadow-sm">
+          📔
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-sm sm:text-base font-semibold tracking-wide text-soft-cream leading-tight">يومياتي</h1>
+            <span id="cloud-sync-pill" class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full border border-canvas-borderLight bg-canvas-surface text-soft-muted flex items-center gap-1 transition-all">
+              <span id="cloud-sync-dot" class="w-1.5 h-1.5 rounded-full bg-soft-muted"></span>
+              <span id="cloud-sync-label">جاري الاتصال...</span>
+            </span>
+          </div>
+          <p class="text-[11px] text-soft-muted hidden sm:block">مساحة هادئة للتركيز والتدوين مع حفظ سحابي</p>
+        </div>
+      </div>
+
+      <!-- محول العرض (تدوينة اليوم | التقويم) متجاوب تماماً مع الشاشات اللمسية -->
+      <nav class="flex items-center bg-canvas-surface p-1 rounded-xl border border-canvas-border order-3 sm:order-2 w-full sm:w-auto justify-center">
+        <button
+          id="nav-editor-btn"
+          class="touch-target flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all bg-canvas-borderLight text-soft-cream shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
+        >
+          <span>✏️</span>
+          <span>تدوينة اليوم</span>
+        </button>
+        <button
+          id="nav-calendar-btn"
+          class="touch-target flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all text-soft-muted hover:text-soft-cream hover:bg-canvas-hover flex items-center justify-center gap-1.5 active:scale-95"
+        >
+          <span>📅</span>
+          <span>التقويم</span>
+        </button>
+      </nav>
+
+      <!-- زر إنشاء تدوينة جديدة فورية -->
+      <div class="flex items-center gap-2 order-2 sm:order-3">
+        <button
+          id="header-new-entry-btn"
+          class="touch-target bg-soft-rose/20 hover:bg-soft-rose/30 active:bg-soft-rose/40 text-soft-rose border border-soft-rose/40 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+        >
+          <span class="text-base leading-none font-bold">+</span>
+          <span class="text-xs sm:text-sm">تدوينة جديدة</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- الصفحة الرئيسية: محرر التدوين الكامل الخالي من المشتتات -->
+  <main id="editor-page" class="flex-1 w-full flex flex-col px-3 sm:px-6 py-4 sm:py-8 max-w-4xl mx-auto transition-opacity duration-200">
+    
+    <!-- شريط معلومات التدوين وعدّاد الكلمات ومؤشر الحفظ -->
+    <div class="w-full flex items-center justify-between pb-4 border-b border-canvas-border/80 mb-5 sm:mb-8 text-xs text-soft-muted gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <span id="save-status-indicator" class="w-2 h-2 rounded-full bg-soft-sage animate-pulse shrink-0"></span>
+        <span id="save-status-text" class="truncate text-soft-muted font-medium">تم الحفظ والمزامنة ✨</span>
+      </div>
+
+      <div class="flex items-center gap-3 shrink-0">
+        <span id="entry-stats-count" class="text-[11px] sm:text-xs text-soft-faint">0 كلمة • 0 حرف</span>
+        <button
+          id="editor-delete-btn"
+          class="hidden touch-target text-rose-400 hover:text-rose-300 transition-colors px-2.5 py-1 rounded-lg hover:bg-rose-950/30 text-xs flex items-center gap-1 active:scale-95"
+        >
+          <span>🗑️</span>
+          <span class="hidden sm:inline">حذف</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- عنوان التدوينة الرئيسي الكبير والمريح للقراءة -->
+    <div class="w-full mb-4 sm:mb-6">
+      <input
+        type="text"
+        id="entry-title-input"
+        placeholder="عنوان التدوينة..."
+        class="w-full bg-transparent text-xl sm:text-3xl md:text-5xl font-bold tracking-tight text-soft-cream placeholder-soft-faint/60 border-none px-0 py-2 focus:ring-0 leading-snug"
+      >
+    </div>
+
+    <!-- جدول الخصائص السريعة بأسلوب Notion المتوافق مع الهواتف -->
+    <div class="w-full bg-canvas-surface/80 border border-canvas-border rounded-2xl p-3.5 sm:p-5 mb-6 sm:mb-8 space-y-3.5 sm:space-y-4 shadow-sm">
+      
+      <!-- خاصية التاريخ -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div class="text-xs sm:text-sm text-soft-muted flex items-center gap-2">
+          <span class="text-sm">📅</span>
+          <span class="font-medium">التاريخ</span>
+        </div>
+        <div class="w-full sm:w-auto">
+          <input
+            type="date"
+            id="entry-date-input"
+            class="touch-target bg-canvas-base border border-canvas-border hover:border-canvas-borderLight rounded-xl px-3 py-2 text-xs sm:text-sm text-soft-cream focus:border-soft-sky transition-colors cursor-pointer w-full sm:w-auto"
+          >
+        </div>
+      </div>
+
+      <!-- خاصية الحالة / المزاج -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-canvas-border/50">
+        <div class="text-xs sm:text-sm text-soft-muted flex items-center gap-2">
+          <span class="text-sm">🏷️</span>
+          <span class="font-medium">الحالة / المزاج</span>
+        </div>
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <select
+            id="entry-mood-select"
+            class="touch-target flex-1 sm:flex-initial bg-canvas-base border border-canvas-border hover:border-canvas-borderLight rounded-xl px-3 py-2 text-xs sm:text-sm text-soft-cream focus:border-soft-sky transition-colors cursor-pointer"
+          >
+            <option value="يوم كويس">🟢 يوم كويس</option>
+            <option value="هادئ">🔵 هادئ</option>
+            <option value="ممتن">🌿 ممتن</option>
+            <option value="متحمس">🔥 متحمس</option>
+            <option value="سعيد">✨ سعيد</option>
+            <option value="متعب">🟣 متعب</option>
+          </select>
+          <div id="mood-pill-preview" class="shrink-0 text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1 border">
+            <!-- تتحدث المعاينة هنا تلقائياً بناءً على المزاج -->
+          </div>
+        </div>
+      </div>
+
+      <!-- خاصية الإنجاز / المهام اليومية -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-canvas-border/50">
+        <div class="text-xs sm:text-sm text-soft-muted flex items-center gap-2">
+          <span class="text-sm">☑️</span>
+          <span class="font-medium">منجز</span>
+        </div>
+        <label class="touch-target flex items-center gap-2.5 cursor-pointer bg-canvas-base/50 sm:bg-transparent p-2 sm:p-0 rounded-xl border sm:border-none border-canvas-border/70 group w-full sm:w-auto">
+          <input
+            type="checkbox"
+            id="entry-completed-input"
+            class="w-5 h-5 rounded-lg border-canvas-border text-soft-rose focus:ring-0 bg-canvas-base accent-soft-rose cursor-pointer"
+          >
+          <span class="text-xs sm:text-sm text-soft-muted group-hover:text-soft-cream transition-colors font-medium">اكتملت مهام اليوم وأولوياته</span>
+        </label>
+      </div>
+
+    </div>
+
+    <!-- مساحة الكتابة والفضفضة الواسعة والمريحة للأعصاب -->
+    <div class="w-full flex-1 flex flex-col mb-4">
+      <textarea
+        id="entry-content-input"
+        placeholder="اضغطي هنا وابدأي بالفضفضة أو تدوين أفكارك، مشاعرك، وما حدث في يومك بكل هدوء..."
+        class="w-full flex-1 min-h-[48vh] sm:min-h-[52vh] bg-transparent text-sm sm:text-base md:text-lg leading-[2] sm:leading-[2.2] tracking-wide text-soft-cream placeholder-soft-faint/60 border-none px-0 py-2 focus:ring-0 resize-y"
+      ></textarea>
+    </div>
+
+    <!-- الشريط السفلي للمحرر -->
+    <div class="w-full flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-4 sm:pt-6 border-t border-canvas-border/70 mt-auto">
+      <button
+        id="view-calendar-from-bottom"
+        class="touch-target w-full sm:w-auto text-xs sm:text-sm text-soft-muted hover:text-soft-cream flex items-center justify-center gap-2 transition-colors py-2"
+      >
+        <span>← عرض أيام الشهر في التقويم</span>
+      </button>
+
+      <button
+        id="manual-save-btn"
+        class="touch-target w-full sm:w-auto bg-soft-rose hover:bg-soft-rose/90 active:bg-soft-rose/80 text-zinc-900 font-semibold px-5 py-2.5 rounded-xl text-xs sm:text-sm transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+      >
+        <span>💾</span>
+        <span>حفظ ومزامنة</span>
+      </button>
+    </div>
+
+  </main>
+
+  <!-- الصفحة الثانية: صفحة التقويم المصممة لتوافق الهواتف مع بطاقات الحالات الملونة -->
+  <section id="calendar-page" class="hidden flex-1 w-full max-w-6xl mx-auto px-2 sm:px-6 py-4 sm:py-8 flex-col transition-opacity duration-200">
+    
+    <!-- شريط التنقل بين الشهور المتجاوب -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4 sm:mb-6">
+      <div class="flex items-center justify-between w-full sm:w-auto gap-3">
+        <h2 class="text-lg sm:text-2xl font-bold tracking-tight text-soft-cream" id="calendar-month-title">أكتوبر 2026</h2>
+        
+        <div class="flex items-center bg-canvas-surface border border-canvas-border rounded-xl p-1 shrink-0">
+          <button id="cal-prev-btn" class="touch-target px-3 py-1.5 text-xs text-soft-muted hover:text-soft-cream hover:bg-canvas-hover rounded-lg transition-colors flex items-center justify-center font-medium">السابق</button>
+          <button id="cal-today-btn" class="touch-target px-3 py-1.5 text-xs text-soft-muted hover:text-soft-cream hover:bg-canvas-hover rounded-lg transition-colors flex items-center justify-center font-medium">اليوم</button>
+          <button id="cal-next-btn" class="touch-target px-3 py-1.5 text-xs text-soft-muted hover:text-soft-cream hover:bg-canvas-hover rounded-lg transition-colors flex items-center justify-center font-medium">التالي</button>
+        </div>
+      </div>
+
+      <div class="w-full sm:w-auto text-center sm:text-right">
+        <span class="text-[11px] sm:text-xs text-soft-muted">اضغطي على أي يوم أو تدوينة للانتقال الفوري إلى المحرر الكامل</span>
+      </div>
+    </div>
+
+    <!-- شبكة التقويم الشهرية -->
+    <div class="bg-canvas-surface border border-canvas-border rounded-2xl overflow-hidden shadow-xl flex-1 flex flex-col w-full">
+      <!-- أسماء أيام الأسبوع -->
+      <div class="grid grid-cols-7 border-b border-canvas-border bg-canvas-base/60 text-center text-[10px] sm:text-xs font-semibold text-soft-muted py-2.5 sm:py-3 select-none">
+        <div>الأحد</div>
+        <div>الإثنين</div>
+        <div>الثلاثاء</div>
+        <div>الأربعاء</div>
+        <div>الخميس</div>
+        <div>الجمعة</div>
+        <div>السبت</div>
+      </div>
+
+      <!-- خانات الأيام الشهرية المنسقة حسب مقاس الشاشة -->
+      <div
+        id="calendar-days-grid"
+        class="grid grid-cols-7 flex-1 min-h-[380px] sm:min-h-[540px] bg-canvas-surface divide-x divide-y divide-x-reverse divide-canvas-border"
+      >
+        <!-- تتولد الأيام هنا برمجياً -->
+      </div>
+    </div>
+
+  </section>
+
+  <!-- تنبيه لطيف لحالة الحفظ والاتصال (Toast) -->
+  <div
+    id="toast-notification"
+    class="fixed bottom-5 inset-x-4 sm:inset-x-auto sm:left-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-canvas-surface/95 backdrop-blur border border-canvas-borderLight text-soft-cream px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-center sm:justify-start gap-2.5 text-xs sm:text-sm font-medium"
+  >
+    <span class="text-soft-sage text-base" id="toast-icon">✓</span>
+    <span id="toast-message">تم حفظ التدوينة بنجاح ومزامنتها سحابياً ✨</span>
+  </div>
+
+  <!-- نافذة تأكيد الحذف بدون Alert أو Confirm -->
+  <div id="confirm-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-canvas-surface border border-canvas-border rounded-2xl max-w-sm w-full p-5 sm:p-6 space-y-4 shadow-2xl text-right">
+      <div class="text-base font-semibold text-soft-cream flex items-center gap-2">
+        <span>🗑️</span>
+        <span>تأكيد حذف التدوينة</span>
+      </div>
+      <p class="text-xs sm:text-sm text-soft-muted leading-relaxed">
+        هل أنتِ متأكدة من رغبتك في حذف هذه التدوينة من السحابة وجهازك؟ لا يمكن التراجع عن هذا الإجراء.
+      </p>
+      <div class="flex items-center justify-end gap-2.5 pt-2">
+        <button id="cancel-delete-btn" class="touch-target px-4 py-2 rounded-xl text-xs font-medium bg-canvas-hover text-soft-muted hover:text-soft-cream transition-colors">إلغاء</button>
+        <button id="confirm-delete-btn" class="touch-target px-4 py-2 rounded-xl text-xs font-medium bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/40 transition-colors">نعم، احذف</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      /* إعدادات Firebase الرسمية المقدمة */
+      const firebaseConfig = {
+        apiKey: "AIzaSyD3CKNYGR3AbXSu5yq8WPYMRH1uRgpNATY",
+        authDomain: "cruds-73186.firebaseapp.com",
+        projectId: "cruds-73186",
+        storageBucket: "cruds-73186.firebasestorage.app",
+        messagingSenderId: "12036264736",
+        appId: "1:12036264736:web:dd25ce18303bcf22217d45",
+        databaseURL: "https://cruds-73186-default-rtdb.europe-west1.firebasedatabase.app"
+      };
+
+      let db = null;
+      let entriesRef = null;
+      let isFirebaseActive = false;
+
+      try {
+        if (typeof firebase !== 'undefined') {
+          firebase.initializeApp(firebaseConfig);
+          db = firebase.database();
+          entriesRef = db.ref('journal_entries');
+          isFirebaseActive = true;
+        }
+      } catch (err) {
+        console.warn("Firebase initialization skipped or restricted:", err);
+      }
+
+      /* أسماء الشهور باللغة العربية */
+      const ARABIC_MONTHS = [
+        "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+        "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
+      ];
+
+      let currentNavDate = new Date(2026, 9, 13);
+      let currentEditingId = null;
+      let activeView = 'editor';
+      let cachedEntries = [];
+      let autoSaveTimer = null;
+
+      /* البيانات الأولية الاحتياطية */
+      const initialSeedEntries = [
+        {
+          id: "seed-1",
+          date: "2026-09-30",
+          title: "لحظة امتنان",
+          mood: "ممتن",
+          completed: true,
+          content: "ممتنة جداً للتفاصيل البسيطة في اليوم والهدوء اللي عشته النهاردة."
+        },
+        {
+          id: "seed-2",
+          date: "2026-10-04",
+          title: "يوم مزدحم",
+          mood: "متعب",
+          completed: false,
+          content: "كان في شغل كتير ومهام ورا بعض، بس الحمد لله عدى على خير."
+        },
+        {
+          id: "seed-3",
+          date: "2026-10-07",
+          title: "فكرة جديدة",
+          mood: "متحمس",
+          completed: true,
+          content: "بدأت أخطط لشكل اليوميات والموقع اللي ببنيه، حاسة بحماس كبير للنتيجة!"
+        },
+        {
+          id: "seed-4",
+          date: "2026-10-10",
+          title: "مشوار لطيف",
+          mood: "سعيد",
+          completed: true,
+          content: "خرجت وغيرت جو وكان يوم دافي ومريح للأعصاب."
+        },
+        {
+          id: "seed-5",
+          date: "2026-10-11",
+          title: "صباح هادئ",
+          mood: "هادئ",
+          completed: true,
+          content: "شربت قهوتي براوقة الصبح وكتبت شوية أفكار وملاحظات ليومي."
+        },
+        {
+          id: "seed-6",
+          date: "2026-10-13",
+          title: "تيست",
+          mood: "يوم كويس",
+          completed: false,
+          content: "اضغط على مفتاح \"المسافة\" للذكاء الاصطناعي، ومفتاح \"/\" للأوامر\n\nتدوينة يوم 13 أكتوبر في الواجهة الكاملة المريحة للعين ومتزامنة سحابياً مع Firebase ✨"
+        }
+      ];
+
+      /* تحديث مؤشر الاتصال بالسحاب في شريط الرأس */
+      function setCloudSyncStatus(status) {
+        const pill = document.getElementById('cloud-sync-pill');
+        const dot = document.getElementById('cloud-sync-dot');
+        const label = document.getElementById('cloud-sync-label');
+        if (!pill || !dot || !label) return;
+
+        if (status === 'online') {
+          pill.className = 'text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full border border-emerald-500/40 bg-emerald-950/40 text-emerald-300 flex items-center gap-1.5 transition-all';
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
+          label.textContent = 'متصل بالسحاب ☁️';
+        } else if (status === 'syncing') {
+          pill.className = 'text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full border border-soft-sky/40 bg-sky-950/40 text-sky-300 flex items-center gap-1.5 transition-all';
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-soft-sky animate-spin';
+          label.textContent = 'جاري المزامنة 🔄';
+        } else {
+          pill.className = 'text-[10px] sm:text-[11px] px-2 py-0.5 rounded-full border border-canvas-borderLight bg-canvas-surface text-soft-muted flex items-center gap-1.5 transition-all';
+          dot.className = 'w-1.5 h-1.5 rounded-full bg-soft-muted';
+          label.textContent = 'غير متصل (محلي) 📴';
+        }
+      }
+
+      /* نظام التخزين المحلي الآمن عند انقطاع الشبكة */
+      function loadLocalStorageEntries() {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            const data = localStorage.getItem('calm_firebase_journal');
+            if (data) return JSON.parse(data);
+          }
+        } catch (e) {
+          console.warn("Storage access restricted:", e);
+        }
+        return initialSeedEntries;
+      }
+
+      function saveLocalStorageEntries(list) {
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('calm_firebase_journal', JSON.stringify(list));
+          }
+        } catch (e) {}
+      }
+
+      /* تنسيق التاريخ */
+      function formatDateToString(d) {
+        const yr = d.getFullYear();
+        const mo = String(d.getMonth() + 1).padStart(2, '0');
+        const dy = String(d.getDate()).padStart(2, '0');
+        return `${yr}-${mo}-${dy}`;
+      }
+
+      /* أنماط الحالات والمزاج لبطاقات التقويم */
+      function getMoodStyle(mood) {
+        switch (mood) {
+          case 'يوم كويس':
+            return {
+              cardClasses: 'bg-emerald-950/40 border-emerald-500/30 text-emerald-200 hover:border-emerald-400/60 hover:bg-emerald-950/60',
+              badgeClasses: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+              mobileDot: 'bg-emerald-400',
+              icon: '🟢',
+              label: 'يوم كويس'
+            };
+          case 'هادئ':
+            return {
+              cardClasses: 'bg-sky-950/40 border-sky-500/30 text-sky-200 hover:border-sky-400/60 hover:bg-sky-950/60',
+              badgeClasses: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+              mobileDot: 'bg-sky-400',
+              icon: '🔵',
+              label: 'هادئ'
+            };
+          case 'ممتن':
+            return {
+              cardClasses: 'bg-teal-950/40 border-teal-500/30 text-teal-200 hover:border-teal-400/60 hover:bg-teal-950/60',
+              badgeClasses: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+              mobileDot: 'bg-teal-400',
+              icon: '🌿',
+              label: 'ممتن'
+            };
+          case 'متحمس':
+            return {
+              cardClasses: 'bg-amber-950/40 border-amber-500/30 text-amber-200 hover:border-amber-400/60 hover:bg-amber-950/60',
+              badgeClasses: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+              mobileDot: 'bg-amber-400',
+              icon: '🔥',
+              label: 'متحمس'
+            };
+          case 'سعيد':
+            return {
+              cardClasses: 'bg-yellow-950/40 border-yellow-500/30 text-yellow-200 hover:border-yellow-400/60 hover:bg-yellow-950/60',
+              badgeClasses: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+              mobileDot: 'bg-yellow-400',
+              icon: '✨',
+              label: 'سعيد'
+            };
+          case 'متعب':
+            return {
+              cardClasses: 'bg-purple-950/40 border-purple-500/30 text-purple-200 hover:border-purple-400/60 hover:bg-purple-950/60',
+              badgeClasses: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+              mobileDot: 'bg-purple-400',
+              icon: '🟣',
+              label: 'متعب'
+            };
+          default:
+            return {
+              cardClasses: 'bg-canvas-surface border-canvas-border text-soft-cream hover:border-canvas-borderLight',
+              badgeClasses: 'bg-canvas-borderLight text-soft-muted border-canvas-border',
+              mobileDot: 'bg-soft-muted',
+              icon: '📄',
+              label: mood || 'يومي'
+            };
+        }
+      }
+
+      /* بدء الاشتراك في المزامنة الحية مع Firebase */
+      function setupFirebaseRealtimeSync() {
+        if (!isFirebaseActive || !entriesRef) {
+          cachedEntries = loadLocalStorageEntries();
+          setCloudSyncStatus('offline');
+          renderCurrentActiveView();
+          return;
+        }
+
+        // الاستماع لحالة اتصال الشبكة بالسحابة
+        const connectedRef = db.ref(".info/connected");
+        connectedRef.on("value", (snap) => {
+          if (snap.val() === true) {
+            setCloudSyncStatus('online');
+          } else {
+            setCloudSyncStatus('offline');
+          }
+        });
+
+        // الاستماع اللحظي للتغييرات في مجلد التدوينات
+        entriesRef.on('value', (snapshot) => {
+          const val = snapshot.val();
+          if (val) {
+            cachedEntries = Object.values(val);
+          } else {
+            // إذا كانت قاعدة البيانات فارغة لأول مرة، نغذيها بالبيانات الافتراضية
+            cachedEntries = [...initialSeedEntries];
+            initialSeedEntries.forEach(item => {
+              entriesRef.child(item.id).set(item);
+            });
+          }
+          saveLocalStorageEntries(cachedEntries);
+          setCloudSyncStatus('online');
+          renderCurrentActiveView();
+        }, (error) => {
+          console.warn("Firebase Read Error:", error);
+          cachedEntries = loadLocalStorageEntries();
+          setCloudSyncStatus('offline');
+          renderCurrentActiveView();
+        });
+      }
+
+      function renderCurrentActiveView() {
+        if (activeView === 'calendar') {
+          renderCalendarView();
+        } else if (currentEditingId) {
+          const entry = cachedEntries.find(e => e.id === currentEditingId);
+          if (entry && document.activeElement !== document.getElementById('entry-content-input') && document.activeElement !== document.getElementById('entry-title-input')) {
+            loadEntryIntoEditor(entry, false);
+          }
+        }
+      }
+
+      /* تحميل التدوينة في المحرر الكامل */
+      function loadEntryIntoEditor(entry, resetIdIfNull = true) {
+        if (!entry) {
+          if (resetIdIfNull) currentEditingId = null;
+          document.getElementById('entry-title-input').value = '';
+          document.getElementById('entry-date-input').value = formatDateToString(new Date(2026, 9, 13));
+          document.getElementById('entry-mood-select').value = 'يوم كويس';
+          document.getElementById('entry-completed-input').checked = false;
+          document.getElementById('entry-content-input').value = '';
+          document.getElementById('editor-delete-btn').classList.add('hidden');
+          document.getElementById('save-status-text').textContent = 'تدوينة جديدة غير محفوظة';
+        } else {
+          currentEditingId = entry.id;
+          document.getElementById('entry-title-input').value = entry.title || '';
+          document.getElementById('entry-date-input').value = entry.date || formatDateToString(new Date(2026, 9, 13));
+          document.getElementById('entry-mood-select').value = entry.mood || 'يوم كويس';
+          document.getElementById('entry-completed-input').checked = !!entry.completed;
+          document.getElementById('entry-content-input').value = entry.content || '';
+          document.getElementById('editor-delete-btn').classList.remove('hidden');
+          document.getElementById('save-status-text').textContent = 'تم الحفظ والمزامنة ✨';
+        }
+
+        updateMoodPillPreview();
+        updateStatsCount();
+      }
+
+      function updateMoodPillPreview() {
+        const mood = document.getElementById('entry-mood-select').value;
+        const style = getMoodStyle(mood);
+        const preview = document.getElementById('mood-pill-preview');
+        preview.className = `shrink-0 text-xs px-2.5 py-1 rounded-lg font-medium border flex items-center gap-1 ${style.badgeClasses}`;
+        preview.textContent = `${style.icon} ${style.label}`;
+      }
+
+      function updateStatsCount() {
+        const text = document.getElementById('entry-content-input').value.trim();
+        const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+        const chars = text.length;
+        document.getElementById('entry-stats-count').textContent = `${words} كلمة • ${chars} حرف`;
+      }
+
+      /* حفظ وتحديث التدوينة في Firebase Realtime Database */
+      function saveCurrentEntry(showToast = true) {
+        const titleVal = document.getElementById('entry-title-input').value.trim();
+        const dateVal = document.getElementById('entry-date-input').value || formatDateToString(new Date(2026, 9, 13));
+        const moodVal = document.getElementById('entry-mood-select').value;
+        const completedVal = document.getElementById('entry-completed-input').checked;
+        const contentVal = document.getElementById('entry-content-input').value;
+
+        if (!titleVal && !contentVal && !currentEditingId) {
+          return;
+        }
+
+        setCloudSyncStatus('syncing');
+        document.getElementById('save-status-text').textContent = 'جارٍ المزامنة السحابية...';
+
+        const title = titleVal || 'تدوينة بدون عنوان';
+        const entryId = currentEditingId || ('entry-' + Date.now());
+
+        const entryData = {
+          id: entryId,
+          title,
+          date: dateVal,
+          mood: moodVal,
+          completed: completedVal,
+          content: contentVal,
+          updatedAt: Date.now()
+        };
+
+        // تحديث محلي فوري
+        currentEditingId = entryId;
+        document.getElementById('editor-delete-btn').classList.remove('hidden');
+
+        const existingIndex = cachedEntries.findIndex(e => e.id === entryId);
+        if (existingIndex >= 0) {
+          cachedEntries[existingIndex] = entryData;
+        } else {
+          cachedEntries.push(entryData);
+        }
+        saveLocalStorageEntries(cachedEntries);
+
+        // إرسال البيانات إلى Firebase
+        if (isFirebaseActive && entriesRef) {
+          entriesRef.child(entryId).set(entryData)
+            .then(() => {
+              setCloudSyncStatus('online');
+              document.getElementById('save-status-text').textContent = 'تم الحفظ والمزامنة السحابية ✨';
+              if (showToast) triggerToast('تم حفظ التدوينة ومزامنتها سحابياً ✨');
+            })
+            .catch((err) => {
+              console.warn("Firebase save error, saved locally:", err);
+              setCloudSyncStatus('offline');
+              document.getElementById('save-status-text').textContent = 'تم الحفظ محلياً (غير متصل بالسحاب)';
+              if (showToast) triggerToast('تم الحفظ في جهازك (تعذر الاتصال بالسحاب)');
+            });
+        } else {
+          setCloudSyncStatus('offline');
+          document.getElementById('save-status-text').textContent = 'تم الحفظ محلياً ✨';
+          if (showToast) triggerToast('تم حفظ التدوينة محلياً ✨');
+        }
+      }
+
+      /* حذف التدوينة من Firebase والتخزين المحلي */
+      function executeDelete() {
+        if (!currentEditingId) return;
+
+        const idToDelete = currentEditingId;
+        closeDeleteConfirm();
+        setCloudSyncStatus('syncing');
+
+        // حذف محلي
+        cachedEntries = cachedEntries.filter(e => e.id !== idToDelete);
+        saveLocalStorageEntries(cachedEntries);
+
+        if (isFirebaseActive && entriesRef) {
+          entriesRef.child(idToDelete).remove()
+            .then(() => {
+              setCloudSyncStatus('online');
+              triggerToast('تم حذف التدوينة من السحابة بنجاح');
+            })
+            .catch((err) => {
+              console.warn("Firebase delete error:", err);
+              triggerToast('تم الحذف محلياً فقط');
+            });
+        } else {
+          triggerToast('تم حذف التدوينة بنجاح');
+        }
+
+        loadEntryIntoEditor(null);
+      }
+
+      /* رسم شبكة التقويم الشهرية المتوافقة مع الموبايل والتابلت والديسكتوب */
+      function renderCalendarView() {
+        const grid = document.getElementById('calendar-days-grid');
+        grid.innerHTML = '';
+
+        const year = currentNavDate.getFullYear();
+        const month = currentNavDate.getMonth();
+
+        document.getElementById('calendar-month-title').textContent = `${ARABIC_MONTHS[month]} ${year}`;
+
+        const firstDayOfMonth = new Date(year, month, 1);
+        const lastDayOfMonth = new Date(year, month + 1, 0);
+
+        const startingWeekday = firstDayOfMonth.getDay();
+        const daysInMonth = lastDayOfMonth.getDate();
+        const prevMonthLastDay = new Date(year, month, 0).getDate();
+
+        // أيام الشهر السابق
+        for (let i = startingWeekday - 1; i >= 0; i--) {
+          const dayNum = prevMonthLastDay - i;
+          const dateObj = new Date(year, month - 1, dayNum);
+          const dateStr = formatDateToString(dateObj);
+          const cellEntries = cachedEntries.filter(e => e.date === dateStr);
+          grid.appendChild(buildCalendarCell(dayNum, true, false, dateStr, cellEntries));
+        }
+
+        // أيام الشهر الحالي
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateObj = new Date(year, month, d);
+          const dateStr = formatDateToString(dateObj);
+          const isToday = (d === 13 && month === 9 && year === 2026);
+          const cellEntries = cachedEntries.filter(e => e.date === dateStr);
+          grid.appendChild(buildCalendarCell(d, false, isToday, dateStr, cellEntries));
+        }
+
+        // إكمال باقي صفوف الأسبوع
+        const totalRendered = startingWeekday + daysInMonth;
+        const remainder = (7 - (totalRendered % 7)) % 7;
+        for (let d = 1; d <= remainder; d++) {
+          const dateObj = new Date(year, month + 1, d);
+          const dateStr = formatDateToString(dateObj);
+          const cellEntries = cachedEntries.filter(e => e.date === dateStr);
+          grid.appendChild(buildCalendarCell(d, true, false, dateStr, cellEntries));
+        }
+      }
+
+      function buildCalendarCell(dayNum, isOtherMonth, isToday, dateStr, dayEntries) {
+        const cell = document.createElement('div');
+        
+        cell.className = `min-h-[58px] sm:min-h-[110px] md:min-h-[130px] p-1 sm:p-2 flex flex-col justify-between sm:justify-start gap-1 transition-all cursor-pointer group active:bg-canvas-hover hover:bg-canvas-hover/50 ${
+          isOtherMonth ? 'opacity-30 bg-canvas-base/30' : 'bg-canvas-surface/70'
+        }`;
+
+        const header = document.createElement('div');
+        header.className = 'flex items-center justify-between w-full';
+
+        const numEl = document.createElement('span');
+        if (isToday) {
+          numEl.className = 'w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-soft-rose text-zinc-900 font-bold flex items-center justify-center text-[11px] sm:text-xs shadow-md ring-2 ring-soft-rose/30 mx-auto sm:mx-0';
+        } else {
+          numEl.className = 'w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-[11px] sm:text-xs font-medium text-soft-muted group-hover:text-soft-cream mx-auto sm:mx-0';
+        }
+        numEl.textContent = dayNum;
+        header.appendChild(numEl);
+        cell.appendChild(header);
+
+        const entriesContainer = document.createElement('div');
+        entriesContainer.className = 'flex flex-col gap-1 w-full mt-0.5';
+
+        dayEntries.forEach(entry => {
+          const style = getMoodStyle(entry.mood);
+
+          // عرض البطاقة الكاملة على الشاشات الكبيرة
+          const desktopCard = document.createElement('div');
+          desktopCard.className = `hidden sm:flex calendar-entry-card rounded-xl p-2 border transition-all transform hover:-translate-y-0.5 shadow-sm flex-col gap-1 text-right ${style.cardClasses}`;
+          desktopCard.innerHTML = `
+            <div class="flex items-center justify-between gap-1">
+              <span class="text-xs font-semibold truncate flex items-center gap-1">
+                <span>📄</span>
+                <span>${escapeHtml(entry.title || 'بدون عنوان')}</span>
+              </span>
+              ${entry.completed ? '<span class="text-[10px] text-soft-sage">✓</span>' : ''}
+            </div>
+            <div class="flex items-center">
+              <span class="text-[10px] px-1.5 py-0.5 rounded-md font-medium border ${style.badgeClasses}">
+                ${style.icon} ${escapeHtml(entry.mood || 'يومي')}
+              </span>
+            </div>
+          `;
+          desktopCard.addEventListener('click', (e) => {
+            e.stopPropagation();
+            loadEntryIntoEditor(entry);
+            switchView('editor');
+          });
+
+          // عرض الوسم المصغر للموبايل والشاشات اللمسية
+          const mobileBadge = document.createElement('div');
+          mobileBadge.className = `flex sm:hidden items-center justify-center gap-1 py-0.5 px-1 rounded-md text-[10px] font-medium border truncate w-full ${style.badgeClasses}`;
+          mobileBadge.innerHTML = `
+            <span class="w-1.5 h-1.5 rounded-full ${style.mobileDot} shrink-0"></span>
+            <span class="truncate">${escapeHtml(entry.title || entry.mood)}</span>
+          `;
+          mobileBadge.addEventListener('click', (e) => {
+            e.stopPropagation();
+            loadEntryIntoEditor(entry);
+            switchView('editor');
+          });
+
+          entriesContainer.appendChild(desktopCard);
+          entriesContainer.appendChild(mobileBadge);
+        });
+
+        cell.appendChild(entriesContainer);
+
+        cell.addEventListener('click', () => {
+          if (dayEntries.length > 0) {
+            loadEntryIntoEditor(dayEntries[0]);
+          } else {
+            loadEntryIntoEditor({
+              date: dateStr,
+              title: '',
+              mood: 'يوم كويس',
+              completed: false,
+              content: ''
+            });
+          }
+          switchView('editor');
+        });
+
+        return cell;
+      }
+
+      /* التبديل بين صفحة التدوين والتقويم */
+      function switchView(target) {
+        activeView = target;
+        const editorPage = document.getElementById('editor-page');
+        const calendarPage = document.getElementById('calendar-page');
+        const editorNavBtn = document.getElementById('nav-editor-btn');
+        const calendarNavBtn = document.getElementById('nav-calendar-btn');
+
+        if (target === 'editor') {
+          editorPage.classList.remove('hidden');
+          calendarPage.classList.add('hidden');
+
+          editorNavBtn.className = 'touch-target flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all bg-canvas-borderLight text-soft-cream shadow-sm flex items-center justify-center gap-1.5';
+          calendarNavBtn.className = 'touch-target flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all text-soft-muted hover:text-soft-cream hover:bg-canvas-hover flex items-center justify-center gap-1.5';
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          saveCurrentEntry(false);
+          editorPage.classList.add('hidden');
+          calendarPage.classList.remove('hidden');
+
+          calendarNavBtn.className = 'touch-target flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all bg-canvas-borderLight text-soft-cream shadow-sm flex items-center justify-center gap-1.5';
+          editorNavBtn.className = 'touch-target flex-1 sm:flex-initial px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all text-soft-muted hover:text-soft-cream hover:bg-canvas-hover flex items-center justify-center gap-1.5';
+
+          renderCalendarView();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+
+      function triggerToast(msg) {
+        const toast = document.getElementById('toast-notification');
+        const toastText = document.getElementById('toast-message');
+        toastText.textContent = msg;
+        toast.classList.remove('translate-y-20', 'opacity-0');
+        toast.classList.add('translate-y-0', 'opacity-100');
+
+        setTimeout(() => {
+          toast.classList.remove('translate-y-0', 'opacity-100');
+          toast.classList.add('translate-y-20', 'opacity-0');
+        }, 2200);
+      }
+
+      function openDeleteConfirm() {
+        if (!currentEditingId) return;
+        const modal = document.getElementById('confirm-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+
+      function closeDeleteConfirm() {
+        const modal = document.getElementById('confirm-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+      }
+
+      function registerEventHandlers() {
+        document.getElementById('nav-editor-btn')?.addEventListener('click', () => switchView('editor'));
+        document.getElementById('nav-calendar-btn')?.addEventListener('click', () => switchView('calendar'));
+        document.getElementById('view-calendar-from-bottom')?.addEventListener('click', () => switchView('calendar'));
+
+        document.getElementById('header-new-entry-btn')?.addEventListener('click', () => {
+          saveCurrentEntry(false);
+          loadEntryIntoEditor(null);
+          switchView('editor');
+        });
+
+        document.getElementById('manual-save-btn')?.addEventListener('click', () => saveCurrentEntry(true));
+
+        const handleTypingEvent = () => {
+          document.getElementById('save-status-text').textContent = 'جارٍ الحفظ والمزامنة...';
+          updateStatsCount();
+          clearTimeout(autoSaveTimer);
+          autoSaveTimer = setTimeout(() => {
+            saveCurrentEntry(false);
+          }, 1000);
+        };
+
+        document.getElementById('entry-title-input')?.addEventListener('input', handleTypingEvent);
+        document.getElementById('entry-content-input')?.addEventListener('input', handleTypingEvent);
+        document.getElementById('entry-date-input')?.addEventListener('change', handleTypingEvent);
+        document.getElementById('entry-completed-input')?.addEventListener('change', handleTypingEvent);
+
+        document.getElementById('entry-mood-select')?.addEventListener('change', () => {
+          updateMoodPillPreview();
+          handleTypingEvent();
+        });
+
+        document.getElementById('editor-delete-btn')?.addEventListener('click', openDeleteConfirm);
+        document.getElementById('cancel-delete-btn')?.addEventListener('click', closeDeleteConfirm);
+        document.getElementById('confirm-delete-btn')?.addEventListener('click', executeDelete);
+
+        document.getElementById('cal-prev-btn')?.addEventListener('click', () => {
+          currentNavDate.setMonth(currentNavDate.getMonth() - 1);
+          renderCalendarView();
+        });
+
+        document.getElementById('cal-next-btn')?.addEventListener('click', () => {
+          currentNavDate.setMonth(currentNavDate.getMonth() + 1);
+          renderCalendarView();
+        });
+
+        document.getElementById('cal-today-btn')?.addEventListener('click', () => {
+          currentNavDate = new Date(2026, 9, 13);
+          renderCalendarView();
+        });
+      }
+
+      function init() {
+        registerEventHandlers();
+        setupFirebaseRealtimeSync();
+
+        // تفعيل التدوينة الأولية فور الفتح
+        const initialList = cachedEntries.length ? cachedEntries : initialSeedEntries;
+        const defaultEntry = initialList.find(e => e.date === '2026-10-13') || initialList[0];
+        loadEntryIntoEditor(defaultEntry);
+        switchView('editor');
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>
